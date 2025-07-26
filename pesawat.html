@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leon - Flying Plane Game</title>
+
+<!-- Font mewah -->
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap" rel="stylesheet">
+
+<style>
+    body {
+        margin: 0;
+        background: linear-gradient(to top, #001f3f, #000);
+        font-family: 'Orbitron', sans-serif;
+        color: white;
+        overflow: hidden;
+        text-align: center;
+    }
+    h1 {
+        margin: 15px 0;
+        font-size: 2.8em;
+        color: #ffcc00;
+        text-shadow: 0 0 15px #ffcc00, 0 0 30px #ff9900;
+    }
+    canvas {
+        display: block;
+        margin: auto;
+        background: linear-gradient(to top, #003366, #000033);
+        border: 3px solid #ffcc00;
+        border-radius: 10px;
+    }
+    #menu, #startMenu {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0,0,0,0.85);
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 20px #ffcc00;
+        text-align: center;
+        width: 300px;
+        display: none;
+    }
+    #menu h2, #startMenu h2 {
+        margin: 0 0 10px;
+        color: #ffcc00;
+    }
+    #failMessage {
+        color: #ff6666;
+        font-size: 20px;
+        margin-bottom: 10px;
+    }
+    button {
+        margin: 5px;
+        padding: 10px 20px;
+        font-size: 16px;
+        font-weight: bold;
+        background: #ffcc00;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-family: 'Orbitron', sans-serif;
+    }
+    button:hover {
+        background: #ffdd33;
+    }
+</style>
+</head>
+<body>
+
+<h1>Leon</h1>
+<canvas id="gameCanvas" width="480" height="720"></canvas>
+
+<!-- Menu Game Over -->
+<div id="menu">
+    <h2>Game Over</h2>
+    <p id="failMessage">Sabar ya jangan emosi</p>
+    <p id="scoreText"></p>
+    <button onclick="restart()">Restart</button><br>
+    <span>Pilih Level:</span><br>
+    <button onclick="setDifficulty('easy')">Mudah</button>
+    <button onclick="setDifficulty('medium')">Lumayan</button>
+    <button onclick="setDifficulty('hard')">Susah</button>
+</div>
+
+<!-- Menu Start -->
+<div id="startMenu">
+    <h2>Selamat Datang</h2>
+    <p>Pilih Level untuk Memulai</p>
+    <button onclick="setDifficulty('easy')">Mudah</button>
+    <button onclick="setDifficulty('medium')">Lumayan</button>
+    <button onclick="setDifficulty('hard')">Susah</button>
+</div>
+
+<!-- Musik Arcade -->
+<audio id="bgMusic" loop>
+    <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const menu = document.getElementById("menu");
+const startMenu = document.getElementById("startMenu");
+const scoreText = document.getElementById("scoreText");
+const bgMusic = document.getElementById("bgMusic");
+
+const planeImg = new Image();
+planeImg.src = "https://i.ibb.co/FXzvC1P/plane.png";
+
+let plane, gravity, lift, obstacles, score, gameOver;
+let obstacleSpeed, spawnInterval, lastSpawn;
+let gameStarted = false;
+
+function showStartMenu() {
+    startMenu.style.display = "block";
+}
+showStartMenu();
+
+function initGame() {
+    plane = { x: 60, y: canvas.height / 2, width: 50, height: 35, velocity: 0 };
+    gravity = 0.5;
+    lift = -6;
+    obstacles = [];
+    score = 0;
+    gameOver = false;
+    lastSpawn = Date.now();
+    menu.style.display = "none";
+    startMenu.style.display = "none";
+    gameStarted = true;
+    bgMusic.play().catch(() => {});
+    requestAnimationFrame(update);
+}
+
+function setDifficulty(level) {
+    if (level === "easy") {
+        obstacleSpeed = 2.5;
+        spawnInterval = 2200;
+    } else if (level === "medium") {
+        obstacleSpeed = 3.5;
+        spawnInterval = 1600;
+    } else if (level === "hard") {
+        obstacleSpeed = 4.5;
+        spawnInterval = 1200;
+    }
+    initGame();
+}
+
+function createObstacle() {
+    const gap = 140;
+    const topHeight = Math.random() * (canvas.height - gap - 100) + 50;
+    obstacles.push({
+        x: canvas.width,
+        width: 60,
+        top: topHeight,
+        bottom: canvas.height - topHeight - gap
+    });
+}
+
+function update() {
+    if (!gameStarted || gameOver) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    plane.velocity += gravity;
+    plane.y += plane.velocity;
+
+    if (plane.y < 0) plane.y = 0;
+    if (plane.y + plane.height > canvas.height) {
+        endGame();
+        return;
+    }
+
+    ctx.drawImage(planeImg, plane.x, plane.y, plane.width, plane.height);
+
+    for (let obs of obstacles) {
+        obs.x -= obstacleSpeed;
+        ctx.fillStyle = "#ff0000";
+        ctx.fillRect(obs.x, 0, obs.width, obs.top);
+        ctx.fillRect(obs.x, canvas.height - obs.bottom, obs.width, obs.bottom);
+
+        if (
+            plane.x < obs.x + obs.width &&
+            plane.x + plane.width > obs.x &&
+            (plane.y < obs.top || plane.y + plane.height > canvas.height - obs.bottom)
+        ) {
+            endGame();
+            return;
+        }
+
+        if (!obs.passed && obs.x + obs.width < plane.x) {
+            obs.passed = true;
+            score++;
+        }
+    }
+
+    obstacles = obstacles.filter(o => o.x + o.width > 0);
+
+    if (Date.now() - lastSpawn > spawnInterval) {
+        createObstacle();
+        lastSpawn = Date.now();
+    }
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "24px Orbitron";
+    ctx.fillText("Score: " + score, 10, 30);
+
+    requestAnimationFrame(update);
+}
+
+function fly() {
+    if (gameStarted && !gameOver) plane.velocity = lift;
+}
+
+function endGame() {
+    gameOver = true;
+    bgMusic.pause();
+    scoreText.textContent = "Score: " + score;
+    menu.style.display = "block";
+}
+
+function restart() {
+    initGame();
+}
+
+canvas.addEventListener("click", fly);
+canvas.addEventListener("touchstart", fly);
+document.addEventListener("keydown", e => {
+    if (e.code === "Space") fly();
+});
+</script>
+
+</body>
+</html>
